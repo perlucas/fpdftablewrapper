@@ -10,13 +10,18 @@ class Row extends Printable
      */
     protected $values;
 
+    protected $widths;
+
+    protected $pdf;
+
     /**
      * constructs an instance
      *
      * @param array $values
      */
-    public function __construct($values = [])
+    public function __construct(FPDFTableWrapper $pdf, $values = [])
     {
+        $this->pdf = $pdf;
         $this->values = $values;
     }
 
@@ -34,6 +39,8 @@ class Row extends Printable
      */
     public function getType() {return 'row';}
 
+    public function getCell($index) {return $this->values[$index];}
+
     /**
      * adds a new cell to this row
      *
@@ -42,6 +49,18 @@ class Row extends Printable
      */
     public function addCellValue($val)
     {
-        $this->values[] = new Cell($val);
+        $this->values[] = new Cell($this->pdf, $val);
+    }
+
+    public function setWidths(array $ww) {$this->widths = $ww;}
+
+    public function getNbLines()
+    {
+        $max = 0;
+        foreach ($this->values as $cellindex => $cell) {
+            $cell->setWidth($this->widths[$cellindex]);
+            $max = max($max, $cell->getNbLines($pdf));
+        }
+        return $max;
     }
 }
