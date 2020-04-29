@@ -1,28 +1,11 @@
 <?php
+
 namespace FPDFWrapper\Core;
 
 class Table extends Printable
 {
-    /**
-     * widths for each column
-     *
-     * @var array
-     */
-    protected $widths;
-
-    /**
-     * aligns for each row
-     *
-     * @var array
-     */
-    protected $aligns;
-
-    /**
-     * flag indicates if the first row is the header
-     *
-     * @var boolean
-     */
-    protected $hasHeader;
+    use ColumnsContainer;
+    use HasWidth;
 
     /**
      * rows of this table
@@ -38,24 +21,33 @@ class Table extends Printable
      */
     protected $currentRow;
 
-    /**
-     * pdf wrapper
-     *
-     * @var FPDFTableWrapper
-     */
-    protected $pdf;
 
     /**
-     * total width
+     * height that must be filled
      *
      * @var float
      */
-    protected $width;
+    protected $fillHeight;
 
+    /**
+     * map for storing callbacks used to change the printing style of  columns
+     * 
+     * @var array
+     */
     protected $columnStyles;
 
+    /**
+     * map for storing callbacks used to change the printing style of rows
+     * 
+     * @var array
+     */
     protected $rowStyles;
 
+    /**
+     * map for storing callbacks used to change the printing style of cells
+     *
+     * @var array
+     */
     protected $cellStyles;
 
     /**
@@ -63,24 +55,24 @@ class Table extends Printable
      *
      * @param $wrapper FPDFTableWrapper
      * @param array $widths
-     * @param array|float $alignsArgument
+     * @param array|string $alignsArgument
      * @param array|null $headerArr
      */
     public function __construct(FPDFTableWrapper $wrapper, $widths, $alignsArgument, $headerArr = null)
     {
-        $this->pdf = $wrapper;
+        // set basic properties
+        parent::__construct($wrapper);
         $this->rows = [];
         $this->widths = $widths;
+        
+        // set align from array or string
         $this->aligns = $alignsArgument = is_string($alignsArgument)
             ? array_fill(0, count($widths), $alignsArgument)
             : $alignsArgument;
         
-        // add header
-        if (\is_null($headerArr)) {
-            $this->hasHeader = false;
-        } else {
-            $this->hasHeader = true;
-            $this->rows[] = new Row($this->pdf, $headerArr);
+        // add header if exists
+        if (! \is_null($headerArr)) {
+            $this->rows[] = new Row($this->pdf, $headerArr, true);    
         }
 
         // check size of aligns and widths
@@ -89,19 +81,20 @@ class Table extends Printable
             throw new \Exception($err, 1);
         }
         if (
-            $this->hasHeader && 
-            (count($this->hasHeader) !== count($this->aligns))
+            ! \is_null($headerArr) &&
+            (count($headerArr) !== count($this->aligns))
         ) {
             throw new \Exception($err, 1);
         }
 
-        // default initialization
+        // default initialization of maps
         $this->columnStyles = [];
         $this->rowStyles = [];
         $this->cellStyles = [];
+        $this->currentRow = null;
+        $this->fillHeight = null;
+        $this->width = 0;
     }
-
-    public function setWidth($w) {$this->width = $w;}
 
     /**
      * string representation of this type of printable
@@ -140,47 +133,44 @@ class Table extends Printable
     public function addRow(Row $row) {$this->rows[] = $row;}
 
     /**
-     * deletes the current row
+     * deletes the current row being plotted
      *
      * @return void
      */
     public function deleteCurrentRow() {$this->currentRow = null;}
 
     /**
-     * returns the amount of columns
+     * seths the height that must be filled on this table
      *
-     * @return int
-     */
-    public function countColumns() {return count($this->aligns);}
-
-    /**
-     * prints this table
-     *
-     * @param null|float $fillHeight
+     * @param float $h
      * @return void
      */
-    public function print($fillHeight = null)
+    public function setFillHeight($h) {$this->fillHeight = $h;}
+
+    /**
+     * prints this table on the pdf
+     *
+     * @return void
+     */
+    public function print()
     {
         $this->addStylesToCells();
         $widths = $this->widths;
-        $aligns = $this->aligns;
-        $body = $this->rows;
         $totalWidth = $this->width;
 
         array_walk($widths, function(&$val, $key) use($totalWidth) {
             $val = ($val * $totalWidth) / 100;
         });
         $initialX = $this->pdf->getX();
-        $cantRows = count($body);
+        $cantRows = count($this->rows);
         $heightOfRows = [];
-        foreach ($body as $rowindex => $row) {
+        foreach ($this->rows as $rowindex => $row) {
 
             // calculate lines that needs this row
             $row->setWidths($widths);
-            $nbLinesRow = $row->getNbLines();
-            $heightRow = $this->pdf->getCellHeight() * $nbLinesRow;
-            if ($rowindex == $cantRows - 1 && $fillHeight) {
-                $remaining = $fillHeight - array_sum($heightOfRows);
+            $heightRow = $this->pdf->getCellHeight() * $row->getNbLines();
+            if ($rowindex == $cantRows - 1 && $this->fillHeight) {
+                $remaining = $this->fillHeight - array_sum($heightOfRows);
                 assert($remaining >= $heightRow, "Bad heightRow and fillheight configuration");
                 $heightRow = $remaining;
             }
@@ -189,40 +179,22 @@ class Table extends Printable
             // check page break
             $this->pdf->checkPageBreak($heightRow);
             
-            // print each cell
-            foreach ($row as $cellindex => $cell) {
-                //Save the current position
-                $x = $this->pdf->GetX();
-                $y = $this->pdf->GetY();
-                if ($cell->isTableCell()) {
-                    $table = $cell->getValue();
-                    $table->setWidth($widths[$cellindex]);
-                    $table->print($heightRow);
-                    $this->pdf->SetXY($x + $widths[$cellindex],$y);
-                } else {
-                    $cell->applyStyles();
+            // print the row
+            $row->setAligns($this->aligns);
+            $row->setHeight($heightRow);
+            $row->print();
 
-                    //Draw the border
-                    $this->pdf->rect($x,$y,$widths[$cellindex],$heightRow);
-
-                    //Print the text
-                    $align = $aligns[$cellindex];
-                    if ($rowindex == 0 && $this->hasHeader) $align = 'C';
-                    $this->pdf->multiCell(
-                        $widths[$cellindex],
-                        $this->pdf->getCellHeight(),
-                        $cell->getValue(),
-                        0,
-                        $align
-                    );
-                }
-                $this->pdf->SetXY($x + $widths[$cellindex],$y);
-            }
+            // restore position
             $this->pdf->ln($heightRow);
             $this->pdf->setX($initialX);
         }
     }
 
+    /**
+     * returns the amount of lines that this table occupies
+     *
+     * @return int
+     */
     public function getNbLines()
     {
         $widths = $this->widths;
@@ -240,14 +212,17 @@ class Table extends Printable
         return $nb;
     }
 
+    /**
+     * adds the callback styles to each cell
+     *
+     * @return void
+     */
     protected function addStylesToCells()
     {
         $headerCallback = function ($pdf) {$pdf->setTableHeaderStyle();};
         $bodyCallback = function ($pdf) {$pdf->setTableBodyStyle();};
         foreach ($this->rows as $index => $row) {
-            $basicCallback = $index === 0 && $this->hasHeader
-                ? $headerCallback
-                : $bodyCallback;
+            $basicCallback = $row->isHeader() ? $headerCallback : $bodyCallback;
             for ($i = 0; $i < $this->countColumns(); $i++) {
                 $row->getCell($i)->addCallback($basicCallback);
                 $callback = null;
@@ -255,7 +230,7 @@ class Table extends Printable
                     $callback = $this->rowStyles[$index];
                 }
                 if (
-                    ($index || !$this->hasHeader) &&
+                    ($index || ! $row->isHeader()) &&
                     \array_key_exists($i, $this->columnStyles)
                 ) {
                     $callback = $this->columnStyles[$i];
@@ -268,9 +243,31 @@ class Table extends Printable
         }
     }
 
+    /**
+     * adds a new callback style to a row
+     *
+     * @param int $index
+     * @param callback $callback
+     * @return void
+     */
     public function setRowStyle($index, $callback) {$this->rowStyles[$index] = $callback;}
 
+    /**
+     * adds a new callback style to a column
+     *
+     * @param int $index
+     * @param callback $callback
+     * @return void
+     */
     public function setColumnStyle($index, $callback) {$this->columnStyles[$index] = $callback;}
 
+    /**
+     * adds a new callback style to a cell
+     *
+     * @param int $row
+     * @param int $col
+     * @param callback $callback
+     * @return void
+     */
     public function setCellStyle($row, $col, $callback) {$this->cellStyles["{$row}x{$col}"] = $callback;}
 }

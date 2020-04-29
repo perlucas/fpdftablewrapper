@@ -1,55 +1,60 @@
 <?php
+
 namespace FPDFWrapper\Core;
 
 class FPDFTableWrapper extends FPDF 
 {
     /**
-     * pila de contextos
+     * contexts stack
      *
-     * @var SplStack
+     * @var \SplStack
      */
     protected $contexts;
 
+    /**
+     * map for storing style callbacks
+     *
+     * @var array
+     */
     protected $styles;
 
     /**
      * current table being plotted
      *
-     * @var core\Table
+     * @var Table
      */
     protected $currentTable;
 
     /**
-     * tabla inicial
+     * initial table
      *
-     * @var string
+     * @var Table
      */
     protected $initialTable;
 
     /**
-     * altura de cada celda por defecto
+     * default table cell height
      *
      * @var float
      */
-    protected $cellHeight;
+    protected $cellHeight = 5;
 
     /**
-     * construye e inicializa una instancia
+     * constructs a new instance
+     *
+     * @param string $orientation
+     * @param string $unit
+     * @param string $size
      */
-    public function __construct()
+    public function __construct($orientation = 'P', $unit = 'mm', $size = 'A4')
     {
-        parent::__construct('P', 'mm', 'A4');
-        $this->B=0;
-		$this->I=0;
-		$this->U=0;
-        $this->HREF='';
+        parent::__construct($orientation, $unit, $size);
         $this->contexts = new \SplStack();
         $this->styles = [];
-        $this->cellHeight = 5;
     }
 
     /**
-     * establece la altura de cada celda por defecto
+     * sets the cell height
      *
      * @param float $vv
      * @return void
@@ -57,7 +62,7 @@ class FPDFTableWrapper extends FPDF
     public function setCellHeight($vv) {$this->cellHeight = $vv;}
 
     /**
-     * devuelve la altura de cada celda
+     * gets the cell height
      *
      * @return float
      */
@@ -66,9 +71,9 @@ class FPDFTableWrapper extends FPDF
     /**
      * configures a table's plotting
      *
-     * @param array $widthsArr - array with percentage occupped for each column
+     * @param array $widthsArr - array width percentage occupped by each column
      * @param array|string $alignsArgument - aligns for each column
-     * @param array $headersArr - optional. Header strings
+     * @param array $headersArr - optional. Header titles
      * @return void
      */
     public function openTable(array $widthsArr, $alignsArgument, array $headersArr = null)
@@ -166,10 +171,10 @@ class FPDFTableWrapper extends FPDF
      */
     public function printRow(array $row)
     {
-        // validar contexto
+        // validate context
         assert($this->_getCurrentContext() === 'table', "Invalid context for printRow");
 
-        // verificar tamaño de la fila
+        // verify size of row
         assert(
             count($row) === $this->currentTable->countColumns(),
             'Invalid size of row'
@@ -218,7 +223,7 @@ class FPDFTableWrapper extends FPDF
         // validate context
         assert($this->_getCurrentContext() === 'row', "Invalid context for printCell {$content}");
 
-        if (is_array($content) || is_object($content)) {
+        if (! \is_scalar($content)) {
             throw new \Exception("Content must be a string value", 1);
         }
 
@@ -226,7 +231,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * agrega un callback de estilos para una fila de la tabla actual
+     * adds a callback for styling a row in the table
      *
      * @param int $rowindex
      * @param callback $callback
@@ -238,7 +243,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * agrega un callback de estilos para una columna de la tabla actual
+     * adds a callback for styling a column in the current table
      *
      * @param int $colindex
      * @param callback $callback
@@ -250,7 +255,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * agrega un callback de estilos para una celda de la tabla actual
+     * adds a callback for styling a cell in the current table
      *
      * @param int $rowindex
      * @param int $colindex
@@ -263,7 +268,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * activa los estilos utilizados para imprimir un header de tabla
+     * sets the printing style to print the table header
      *
      * @return void
      */
@@ -274,7 +279,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * activa los estilos utilizados para imprimir un cuerpo de tabla
+     * sets the printing styles to print the table body
      *
      * @return void
      */
@@ -285,7 +290,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * agrega un nuevo callback de estilos
+     * adds a new callback using an alias
      *
      * @param string $alias
      * @param callback $func
@@ -297,7 +302,7 @@ class FPDFTableWrapper extends FPDF
     }
 
     /**
-     * ejecuta el callback de estilos
+     * executes the callback stored with the alias
      *
      * @param string $alias
      * @return void
@@ -307,6 +312,16 @@ class FPDFTableWrapper extends FPDF
         $cc = \array_key_exists($alias, $this->styles)
             ? $this->styles[$alias] : null;
         if ($cc) $cc($this);
+    }
+    
+    /**
+     * returns the current context type
+     *
+     * @return string
+     */
+    protected function _getCurrentContext()
+    {
+        return $this->contexts->top()->getType();
     }
 
     /**
@@ -318,12 +333,76 @@ class FPDFTableWrapper extends FPDF
         parent::cell($w, $h, $txt, $border, $ln, $align, $fill, $link);
     }
 
-
-    
-    
-    protected function _getCurrentContext()
+    /**
+     * nblines implementation
+     *
+     * @see http://www.fpdf.org/en/script/script3.php
+     * @param float $w
+     * @param string $txt
+     * @return int
+     */
+    public function NbLines($w, $txt)
     {
-        return $this->contexts->top()->getType();
+        //Computes the number of lines a MultiCell of width w will take
+        $cw=&$this->CurrentFont['cw'];
+        if($w==0)
+            $w=$this->w-$this->rMargin-$this->x;
+        $wmax=($w-2*$this->cMargin)*1000/$this->FontSize;
+        $s=str_replace("\r",'',$txt);
+        $nb=strlen($s);
+        if($nb>0 and $s[$nb-1]=="\n")
+            $nb--;
+        $sep=-1;
+        $i=0;
+        $j=0;
+        $l=0;
+        $nl=1;
+        while($i<$nb)
+        {
+            $c=$s[$i];
+            if($c=="\n")
+            {
+                $i++;
+                $sep=-1;
+                $j=$i;
+                $l=0;
+                $nl++;
+                continue;
+            }
+            if($c==' ')
+                $sep=$i;
+            $l+=$cw[$c];
+            if($l>$wmax)
+            {
+                if($sep==-1)
+                {
+                    if($i==$j)
+                        $i++;
+                }
+                else
+                    $i=$sep+1;
+                $sep=-1;
+                $j=$i;
+                $l=0;
+                $nl++;
+            }
+            else
+                $i++;
+        }
+        return $nl;
     }
 
+    /**
+     * check page break implementation
+     * 
+     * @see http://www.fpdf.org/en/script/script3.php
+     * @param float $h
+     * @return void
+     */
+    public function CheckPageBreak($h)
+    {
+        //If the height h would cause an overflow, add a new page immediately
+        if($this->GetY()+$h>$this->PageBreakTrigger)
+            $this->AddPage($this->CurOrientation);
+    }
 }
