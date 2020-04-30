@@ -11,6 +11,7 @@
     "require": {
         "setasign/fpdf": "1.8"
     },
+    "licence" : "0BSD",
     "autoload": {
         "psr-4": {
             "FPDFWrapper\\":"src/",
