@@ -1,4 +1,13 @@
 {
+	"name": "perlucas/fpdftablewrapper",
+    "description": "FPDF wrapper that reduces complexity when creating tables in a PDF",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Lucas",
+            "email": "lukaspereyra8@gmail.com"
+        }
+    ],
     "require": {
         "setasign/fpdf": "1.8"
     },
