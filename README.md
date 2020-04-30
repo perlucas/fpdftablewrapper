@@ -2,7 +2,21 @@
 
 `FPDFTableWrapper` is an extension of the well-known `FPDF` class that introduces methods and utilities for making table printing an easy and agile activity. This extension will be helpfull while working on PDF development using FPDF. If your document prints tables that can be difficult to construct using the ordinary  FPDF methods, then this extension is what you need to make the table-designing and printing an easy task.
 
-[TOC]
+- [FPDFTableWrapper: a table-oriented wrapper for FPDF](#fpdftablewrapper--a-table-oriented-wrapper-for-fpdf)
+  * [Basic usage](#basic-usage)
+    + [Nested tables](#nested-tables)
+    + [Table merging and cell divisions](#table-merging-and-cell-divisions)
+    + [Table styles](#table-styles)
+      - [Cells height](#cells-height)
+    + [Row styles](#row-styles)
+      - [Column styles](#column-styles)
+      - [Cell styles](#cell-styles)
+      - [Styles in nested tables](#styles-in-nested-tables)
+      - [Priority of styles](#priority-of-styles)
+    + [Additional methods](#additional-methods)
+  * [Additional resources](#additional-resources)
+
+
 ## Basic usage
 
 `FPDFTableWrapper` is an extension of `FPDF` class. You can use the traditional `FPDF` methods for printing and laying out your document. The wrapper only must be used when printing table-oriented structures (i.e: basic tables, nested tables, etc.). Let's see a basic example:
