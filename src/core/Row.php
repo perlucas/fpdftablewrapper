@@ -30,11 +30,16 @@ class Row extends Printable
     public function __construct(FPDFTableWrapper $pdf, $values = [], $header = false)
     {
         parent::__construct($pdf);
-        $this->values = $values;
+        $this->values = [];
         $this->isHeader = $header;
         $this->widths = null;
         $this->height = null;
         $this->aligns = null;
+
+        // fill with values
+        foreach ($values as $vv) {
+            $this->values[] = $vv instanceof Cell ? $vv : new Cell($this->pdf, $vv);
+        }
     }
 
     /**
@@ -69,6 +74,14 @@ class Row extends Printable
     {
         $this->values[] = new Cell($this->pdf, $val);
     }
+
+    /**
+     * adds a new cell
+     *
+     * @param Cell $c
+     * @return void
+     */
+    public function addCell(Cell $c) {$this->values[] = $c;}
 
     /**
      * returns true if this row is a header
@@ -110,8 +123,9 @@ class Row extends Printable
         $max = 0;
         foreach ($this->values as $cellindex => $cell) {
             $cell->setWidth($this->widths[$cellindex]);
-            $max = max($max, $cell->getNbLines($pdf));
+            $max = max($max, $cell->getNbLines($this->pdf));
         }
         return $max;
     }
+
 }

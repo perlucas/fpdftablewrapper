@@ -34,7 +34,7 @@ class Cell extends Printable
      * @param FPDFTableWrapper $pdf
      * @param mixed $vv
      */
-    public function __construct(FPDFTableWrapper $pdf, $vv)
+    public function __construct(FPDFTableWrapper $pdf, $vv = null)
     {
         parent::__construct($pdf);
         $this->value = $vv;
@@ -50,6 +50,14 @@ class Cell extends Printable
      * @return mixed
      */
     public function getValue() {return $this->value;}
+
+    /**
+     * sets the value of a cell
+     *
+     * @param mixed $vv
+     * @return void
+     */
+    public function setValue($vv) {$this->value = $vv;}
 
     /**
      * returns true if has a table inside
@@ -78,6 +86,13 @@ class Cell extends Printable
     public function addCallback($c) {$this->callbacks[] = $c;}
 
     /**
+     * string representation of this element
+     *
+     * @return string
+     */
+    public function getType() {return 'cell';}
+
+    /**
      * implements the printing for a cell
      *
      * @return void
@@ -104,7 +119,8 @@ class Cell extends Printable
                 $this->pdf->getCellHeight(),
                 $this->getValue(),
                 0,
-                $this->align
+                $this->align,
+                true
             );
         }
     }
@@ -131,8 +147,7 @@ class Cell extends Printable
      */
     protected function applyStyles()
     {
-        $reverse = \array_reverse($this->callbacks);
-        foreach ($reverse as $c) {
+        foreach ($this->callbacks as $c) {
             $c($this->pdf);
         }
     }

@@ -2,7 +2,7 @@
 
 namespace FPDFWrapper\Core;
 
-class FPDFTableWrapper extends FPDF 
+class FPDFTableWrapper extends \FPDF
 {
     /**
      * contexts stack
@@ -110,11 +110,21 @@ class FPDFTableWrapper extends FPDF
         $oldContext = $this->contexts->pop();
         if (! $this->contexts->isEmpty()) {
             $this->currentTable = $this->contexts->top();
+            $this->contexts->rewind();
+            while (
+                $this->contexts->valid() && 
+                $this->currentTable->getType() != 'table'
+            ) {
+                $this->currentTable = $this->contexts->current();
+                $this->contexts->next();
+            }
+            $this->contexts->rewind();
+            assert($this->currentTable->getType() == 'table', 'Error finding the current table!');
         }
 
         // if we're in a cell context, then set it as a table in a cell
         if (!$this->contexts->isEmpty() && $this->_getCurrentContext() === 'cell') {
-            $this->currentTable->getCurrentRow()->addCellValue($oldContext);
+            $this->contexts->top()->setValue($oldContext);
         } else {
             // print the table if there's no more contexts
             $this->initialTable->setWidth($this->w - $this->lMargin - $this->rMargin);
@@ -209,7 +219,9 @@ class FPDFTableWrapper extends FPDF
         assert($this->_getCurrentContext() === 'cell', "Invalid context for closeCell");
 
         // change context
-        $this->contexts->pop();
+        $cell = $this->contexts->pop();
+
+        $this->contexts->top()->addCell($cell);
     }
     
     /**
@@ -275,7 +287,7 @@ class FPDFTableWrapper extends FPDF
     public function setTableHeaderStyle()
     {
         $this->setFont('Arial', 'B', 9);
-        $this->SetFillColor(233,241,219);
+        $this->SetFillColor(146,217,255);
     }
 
     /**
